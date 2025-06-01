@@ -15,6 +15,7 @@ use rayon::iter::ParallelIterator;
 
 pub struct KZG<P: DenseUVPolynomial<<G as Pairing>::ScalarField>, G: Pairing> {
     pp1: Vec<G::G1Affine>,
+    // to support type 3 pairing, we need an additional pp in G2
     pp2: G::G2Affine,
     _poly: PhantomData<P>,
 }
@@ -31,6 +32,8 @@ pub enum KZGError {
 impl<P: DenseUVPolynomial<<G as Pairing>::ScalarField>, G: Pairing> KZG<P, G> {
     pub fn setup<R: Rng>(degree: NonZero<usize>, rng: &mut R) -> Self {
         let sk = <<G as Pairing>::ScalarField as UniformRand>::rand(rng);
+
+        // Can use `batch_mul` to speed up
         let pp = iter!((0..=degree.into()), owned)
             .map(|i| {
                 let ski = sk.pow([i as u64]);
@@ -87,7 +90,7 @@ impl<P: DenseUVPolynomial<<G as Pairing>::ScalarField>, G: Pairing> KZG<P, G> {
         i: <G as Pairing>::ScalarField,
         pi: <G as Pairing>::ScalarField,
     ) -> bool {
-        // we do all the computation in G1, which might not be ideal in some cases
+        // we do most of the computations in G1
         G::multi_pairing(
             [cp.com, -cq.com, -G::G1::generator().mul(pi)],
             [

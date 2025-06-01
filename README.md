@@ -27,6 +27,7 @@ cargo test
 
 * [x] Support for KZG (Kate-Zaverucha-Goldberg)
     * [ ] Batch Opening
+    * [ ] Zero Knowledge
 * [ ] Inner product argument (IPA) commitments
 * [ ] FRI (Fast Reed-Solomon IOP of Proximity) commitments
 * [ ] WASM bindings for browser-based experiments
