@@ -1,0 +1,20 @@
+[package]
+name = "poly-commit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ark-ec = "0.5.0"
+ark-ff = "0.5.0"
+ark-poly = "0.5.0"
+ark-std = "0.5.0"
+rand = "0.9.1"
+rand_core = "0.9.3"
+rayon = { version = "1.10.0", optional = true }
+
+[dev-dependencies]
+ark-test-curves = { version = "0.5.0", features = ["bls12_381_curve"] }
+
+[features]
+default = ["parallel"]
+parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon"]
