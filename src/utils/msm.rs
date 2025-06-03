@@ -19,7 +19,19 @@ fn ln_without_floats(a: usize) -> usize {
 }
 
 fn pippenger_internal<G: VariableBaseMSM>(bases: &[G::MulBase], scalars: &[G::ScalarField]) -> G {
-    // TODO: optimize w calculation
+    // Let l be scalar field bit length, w be the window bit length, n be the num of elements.
+    //
+    // ## Cost of MSM
+    // - Scalar decomposition: n * l/w
+    // - Bucket accumulation additions: 2^w * l/w
+    // - Window combination squarings: l
+    // - Window combination addition: l/w
+    //
+    // Optimize the above costs yield w = log_2 n - log_2 (w ln 2) \approx = O(log_2 n)
+    // - `arkworks` choose ln(n) + 2 as the window size
+    //
+    // ## Cost of Naive MSM
+    // - O(n * l)
     let size = bases.len();
     let window_size_bits: usize = if size < 32 {
         3
