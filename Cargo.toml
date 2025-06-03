@@ -24,3 +24,7 @@ parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-poly/parallel", "ark-std/
 [[bench]]
 name = "kzg"
 harness = false
+
+[[bench]]
+name = "pippenger"
+harness = false

@@ -1,3 +1,2 @@
 pub mod kzg;
-
-pub(crate) mod utils;
+pub mod utils;
