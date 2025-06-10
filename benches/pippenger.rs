@@ -17,6 +17,10 @@ fn pippenger_bench(c: &mut Criterion) {
     //
     // See Signed Bucket Indexes for Multi-Scalar Multiplication (MSM)
     // - https://hackmd.io/@drouyang/signed-bucket-index
+    // - Note, signed bucket index is actually different from WNAF, which is commonly
+    //   used to speed up fixed MSM (in which the scalar mul can be speed up by using
+    //   a pre-built lookup table). WNAF reduces the Hamming Weight of the numbers.
+    //   - https://hackmd.io/@drouyang/S1GgWQvoj
 
     // `arkworks` impl of `msm_bigint_wnaf` is not very optimal
     // as it still allocates a bucket of size 2^c rather than 2^(c-1)
