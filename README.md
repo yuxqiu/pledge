@@ -32,11 +32,12 @@ cargo test
     * [ ] Inner product argument (IPA) commitments
     * [ ] FRI (Fast Reed-Solomon IOP of Proximity) commitments
     * [ ] ECC based PCS
-        * [ ] Reed-Solomon Code
+        * [x] Reed-Solomon Code
         * [ ] Linear Time Encodable Code
+        * [ ] PCS
 * Sumcheck
     * [ ] CTY11
-    * [ ] VSBW13
+    * [x] VSBW13
     * [ ] [Blendy](https://github.com/compsec-epfl/efficient-sumcheck)
 * Others
     * [ ] WASM bindings for browser-based experiments
