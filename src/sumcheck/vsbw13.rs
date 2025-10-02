@@ -86,11 +86,8 @@ where
             .add_scalars(2, "proof")
             .challenge_scalars(1, "challenge");
 
-        for i in (1..p.num_vars()).rev() {
-            ds = ds
-                .add_scalars(1 << i, "polynomial")
-                .add_scalars(2, "proof")
-                .challenge_scalars(1, "challenge");
+        for _ in (1..p.num_vars()).rev() {
+            ds = ds.add_scalars(2, "proof").challenge_scalars(1, "challenge");
         }
 
         ds
@@ -128,9 +125,6 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Multilinea
             ps.add_scalars(&[pp.0, pp.1])?;
             let [r] = ps.challenge_scalars()?;
             p = InteractiveVSBW13::prover_reduce_step(&p, r);
-            if p.num_vars() != 0 {
-                ps.add_scalars(&p.to_evaluations())?;
-            }
         }
 
         Ok(ps.narg_string().into())
@@ -145,17 +139,13 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Multilinea
 
         let mut rs = vec![];
         let mut prev_sum = sum;
-        for i in 0..p.num_vars() - 1 {
+        for _ in 0..p.num_vars() - 1 {
             let [p0, p1] = vs.next_scalars()?;
             InteractiveVSBW13::<P, F>::verify_step(prev_sum, (p0, p1))?;
 
             let [r] = vs.challenge_scalars()?;
             prev_sum = InteractiveVSBW13::<P, F>::verifier_reduce_step((p0, p1), r);
             rs.push(r);
-
-            // ignore the next polynomial
-            let mut sink = vec![F::default(); 1 << (p.num_vars() - i - 1)];
-            vs.fill_next_scalars(&mut sink)?;
         }
 
         let [p0, p1] = vs.next_scalars()?;
