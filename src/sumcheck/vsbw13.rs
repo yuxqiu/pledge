@@ -2,7 +2,7 @@ use std::{marker::PhantomData, ops::Index};
 
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, MultilinearExtension, Polynomial, univariate::DensePolynomial};
-use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use spongefish::{
     DefaultHash,
     codecs::arkworks_algebra::{
@@ -11,7 +11,7 @@ use spongefish::{
     },
 };
 
-use crate::sumcheck::MultilinearSumcheck;
+use crate::{iter, sumcheck::MultilinearSumcheck};
 
 struct InteractiveVSBW13<P, F>(PhantomData<(P, F)>);
 
@@ -21,13 +21,11 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Interactiv
         assert!(p.num_vars() != 0, "polynomial p cannot be empty");
 
         // the polynomial is non empty
-        let p0 = (0..1 << p.num_vars())
-            .into_par_iter()
+        let p0 = iter!(0..1 << p.num_vars(), owned)
             .step_by(2)
             .map(|i| p.index(i))
             .sum();
-        let p1 = (1..1 << p.num_vars())
-            .into_par_iter()
+        let p1 = iter!(1..1 << p.num_vars(), owned)
             .step_by(2)
             .map(|i| p.index(i))
             .sum();
