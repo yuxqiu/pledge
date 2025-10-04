@@ -2,6 +2,9 @@ use ark_ff::Field;
 use ark_poly::MultilinearExtension;
 use spongefish::ProofResult;
 
+mod cty11;
+mod polynomial;
+mod utils;
 mod vsbw13;
 
 pub trait MultilinearSumcheck<P: MultilinearExtension<F>, F: Field> {

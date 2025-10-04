@@ -36,11 +36,12 @@ cargo test
         * [ ] Linear Time Encodable Code
         * [ ] PCS
 * Sumcheck
-    * [ ] CTY11
+    * [x] CTY11
     * [x] VSBW13
     * [ ] [Blendy](https://github.com/compsec-epfl/efficient-sumcheck)
 * Others
     * [ ] WASM bindings for browser-based experiments
+    * [ ] Compile without `rayon`
 
 ## License
 
