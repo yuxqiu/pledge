@@ -40,7 +40,7 @@ fn pippenger_internal<G: VariableBaseMSM>(bases: &[G::MulBase], scalars: &[G::Sc
     };
 
     let scalars: Vec<_> = iter!(scalars, owned).map(|s| s.into_bigint()).collect();
-    let bases_scalars = bases.into_iter().zip(scalars).filter(|(_, s)| !s.is_zero());
+    let bases_scalars = bases.iter().zip(scalars).filter(|(_, s)| !s.is_zero());
     let num_bits = <G::ScalarField as PrimeField>::MODULUS_BIT_SIZE;
 
     let window_sums: Vec<_> = iter!((0..num_bits), owned)

@@ -33,10 +33,10 @@ impl<F: FftField> Encoder<F> for ReedSolomonEncoder<F> {
         let domain = GeneralEvaluationDomain::<F>::new(elems.len()).unwrap();
 
         // Perform iFFT to recover polynomial
-        let coeffs = domain.ifft(&elems);
+        let coeffs = domain.ifft(elems);
 
         // Evaluate the polynomial on n points to construct the Reed-Solomon Code
         let domain = GeneralEvaluationDomain::<F>::new(self.n).unwrap();
-        domain.fft(&coeffs).into()
+        domain.fft(&coeffs)
     }
 }

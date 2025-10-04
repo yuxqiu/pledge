@@ -22,7 +22,7 @@ impl<P: DenseMVPolynomialEval<F>, F: Field> InteractiveCTY11<P, F> {
             "len of rs should be smaller than the number of variables in p"
         );
 
-        if rs.len() == 0 {
+        if rs.is_empty() {
             return (
                 iter!(0..1 << (p.num_vars() - 1), owned)
                     .map(|i| i << 1)
