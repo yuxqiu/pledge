@@ -150,7 +150,7 @@ mod test {
     }
 
     #[test]
-    fn test_interactive_vsbw13() {
+    fn test_interactive_cty11() {
         type F = bls12_381::Fq;
         let mut rng = test_rng();
 

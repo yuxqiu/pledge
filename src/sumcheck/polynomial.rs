@@ -20,11 +20,13 @@ impl LagPoly {
 
         iter!(to_bits(bs), owned)
             .zip(rs)
-            .fold_with(F::one(), |a, (b, r)| {
-                let b = F::from(b);
-                a * (b * r + (F::one() - b) * (F::one() - r))
-            })
-            .reduce(|| F::one(), |a, b| a * b)
+            .fold_with(
+                F::one(),
+                |a, (b, r)| {
+                    if b { a * r } else { a * (F::one() - r) }
+                },
+            )
+            .product()
     }
 }
 
