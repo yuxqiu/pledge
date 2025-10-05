@@ -11,7 +11,7 @@ use spongefish::{
     },
 };
 
-use crate::{iter, sumcheck::MultilinearSumcheck};
+use crate::{iter, sumcheck::MultilinearSumcheckEval};
 
 struct InteractiveVSBW13<P, F>(PhantomData<(P, F)>);
 
@@ -101,7 +101,7 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> VSBW13<P, 
     }
 }
 
-impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> MultilinearSumcheck<P, F>
+impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> MultilinearSumcheckEval<P, F>
     for VSBW13<P, F>
 {
     // Proof needs to be returned in Vec unless we let caller to manager ProverState
@@ -166,7 +166,7 @@ mod test {
     use ark_test_curves::bls12_381;
 
     use crate::sumcheck::{
-        MultilinearSumcheck,
+        MultilinearSumcheckEval,
         vsbw13::{InteractiveVSBW13, VSBW13},
     };
 
