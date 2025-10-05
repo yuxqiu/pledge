@@ -116,10 +116,8 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Multilinea
 
         // Easy way, but incurs additional memory allocation
         let mut p = p.clone();
-        let mut proof = Vec::new();
         while p.num_vars() != 0 {
             let pp = InteractiveVSBW13::prove_step(&p);
-            proof.push(pp);
             ps.add_scalars(&[pp.0, pp.1])?;
             let [r] = ps.challenge_scalars()?;
             p = InteractiveVSBW13::prover_reduce_step(&p, r);

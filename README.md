@@ -37,8 +37,11 @@ cargo test
         * [ ] PCS
 * Sumcheck
     * [x] CTY11
+        * [ ] Custom Multilinear Polynomial that supports efficient hypercube evaluations (can save many field multiplications)
     * [x] VSBW13
     * [ ] [Blendy](https://github.com/compsec-epfl/efficient-sumcheck)
+        * [ ] Sumcheck for Multilinear Polynomial
+        * [ ] Sumcheck for product of Multilinear Polynomial
 * Others
     * [ ] WASM bindings for browser-based experiments
     * [ ] Compile without `rayon`

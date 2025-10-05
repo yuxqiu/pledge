@@ -13,7 +13,7 @@ pub fn pippenger<G: VariableBaseMSM>(
         .ok_or(bases.len().min(scalars.len()))
 }
 
-fn ln_without_floats(a: usize) -> usize {
+const fn ln_without_floats(a: usize) -> usize {
     // log2(a) * ln(2)
     (ark_std::log2(a) * 69 / 100) as usize
 }

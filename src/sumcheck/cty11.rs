@@ -265,14 +265,13 @@ mod test {
         random_terms.push((Fr::rand(rng), SparseTerm::new(vec![])));
         for _ in 1..num_terms {
             let term = (0..l)
-                .map(|i| {
+                .filter_map(|i| {
                     if rng.gen_bool(0.5) {
                         Some((i, rng.gen_range(1..(d + 1))))
                     } else {
                         None
                     }
                 })
-                .flatten()
                 .collect();
             let coeff = Fr::rand(rng);
             random_terms.push((coeff, SparseTerm::new(term)));

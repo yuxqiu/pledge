@@ -8,7 +8,7 @@ use rayon::iter::{IndexedParallelIterator, ParallelIterator};
 use crate::iter;
 use crate::sumcheck::utils::to_bits;
 
-pub(crate) struct LagPoly;
+pub struct LagPoly;
 
 impl LagPoly {
     pub fn evaluate<F: Field>(bs: usize, rs: &[F]) -> F {
