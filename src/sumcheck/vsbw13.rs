@@ -89,7 +89,7 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Multilinea
             InteractiveVSBW13::<P, F>::verify_step(prev_sum, (*p0, *p1))?;
             prev_sum = InteractiveVSBW13::<P, F>::verifier_reduce_step((*p0, *p1), *r);
         }
-        InteractiveVSBW13::<P, F>::verify_final(p, &rs, prev_sum)
+        InteractiveVSBW13::<P, F>::verify_final(p, rs, prev_sum)
     }
 }
 

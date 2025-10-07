@@ -117,7 +117,7 @@ impl<P: MultilinearOracle<F>, F: Field> MultilinearSumcheck<P, F> for CTY11<P, F
             InteractiveCTY11::<P, F>::verify_step(prev_sum, (*p0, *p1))?;
             prev_sum = InteractiveCTY11::<P, F>::verifier_reduce_step((*p0, *p1), *r);
         }
-        InteractiveCTY11::<P, F>::verify_final(p, &rs, prev_sum)?;
+        InteractiveCTY11::<P, F>::verify_final(p, rs, prev_sum)?;
 
         Ok(())
     }
