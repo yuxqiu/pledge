@@ -1,7 +1,7 @@
 use ark_ff::Field;
 use ark_poly::MultilinearExtension;
 
-use crate::sumcheck::polynomial::DenseMVPolynomialEval;
+use crate::sumcheck::polynomial::MultilinearOracle;
 
 mod cty11;
 mod polynomial;
@@ -15,7 +15,7 @@ pub trait MultilinearSumcheckEval<P: MultilinearExtension<F>, F: Field> {
     fn verify(p: &P, sum: F, proof: &Self::Proof, rs: &[F]) -> SumcheckResult<()>;
 }
 
-pub trait MultilinearSumcheck<P: DenseMVPolynomialEval<F>, F: Field> {
+pub trait MultilinearSumcheck<P: MultilinearOracle<F>, F: Field> {
     type Proof;
 
     fn prove(p: &P, sum: F, rs: &[F]) -> SumcheckResult<Self::Proof>;

@@ -4,18 +4,13 @@ use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, Polynomial, univariate::DensePolynomial};
 use rayon::iter::ParallelIterator;
 
+use crate::sumcheck::polynomial::MultilinearOracle;
 use crate::sumcheck::{MultilinearSumcheck, SumcheckResult};
-use crate::{
-    iter,
-    sumcheck::{
-        polynomial::{DenseMVPolynomialEval, LagPoly},
-        utils::to_bits_field,
-    },
-};
+use crate::{iter, sumcheck::polynomial::LagPoly};
 
 struct InteractiveCTY11<P, F>(PhantomData<(P, F)>);
 
-impl<P: DenseMVPolynomialEval<F>, F: Field> InteractiveCTY11<P, F> {
+impl<P: MultilinearOracle<F>, F: Field> InteractiveCTY11<P, F> {
     pub fn prove_step(p: &P, rs: &[F]) -> (F, F) {
         assert!(
             p.num_vars() > rs.len(),
@@ -25,15 +20,11 @@ impl<P: DenseMVPolynomialEval<F>, F: Field> InteractiveCTY11<P, F> {
         if rs.is_empty() {
             return (
                 iter!(0..1 << (p.num_vars() - 1), owned)
-                    .map(|i| i << 1)
-                    .map(to_bits_field)
-                    .map(|bits| DenseMVPolynomialEval::evaluate(p, &bits))
+                    .map(|i| p.evaluate_hypercube(i << 1))
                     .fold_with(F::zero(), |a, b| a + b)
                     .sum(),
                 iter!(0..1 << (p.num_vars() - 1), owned)
-                    .map(|i| (i << 1) + 1)
-                    .map(to_bits_field)
-                    .map(|bits| DenseMVPolynomialEval::evaluate(p, &bits))
+                    .map(|i| p.evaluate_hypercube((i << 1) + 1))
                     .fold_with(F::zero(), |a, b| a + b)
                     .sum(),
             );
@@ -53,8 +44,8 @@ impl<P: DenseMVPolynomialEval<F>, F: Field> InteractiveCTY11<P, F> {
                             // Construct the number for psum1: j | 1 | i
                             let num1 = (j << (rs.len() + 1)) | (1 << rs.len()) | i;
 
-                            psum0 += DenseMVPolynomialEval::evaluate(p, &to_bits_field::<F>(num0));
-                            psum1 += DenseMVPolynomialEval::evaluate(p, &to_bits_field::<F>(num1));
+                            psum0 += p.evaluate_hypercube(num0);
+                            psum1 += p.evaluate_hypercube(num1);
                             (psum0, psum1)
                         },
                     )
@@ -88,7 +79,7 @@ impl<P: DenseMVPolynomialEval<F>, F: Field> InteractiveCTY11<P, F> {
     }
 
     pub fn verify_final(p: &P, rs: &[F], final_sum: F) -> SumcheckResult<()> {
-        if DenseMVPolynomialEval::evaluate(p, rs) == final_sum {
+        if p.evaluate(rs) == final_sum {
             Ok(())
         } else {
             Err(())
@@ -98,7 +89,7 @@ impl<P: DenseMVPolynomialEval<F>, F: Field> InteractiveCTY11<P, F> {
 
 struct CTY11<P, F>(PhantomData<(P, F)>);
 
-impl<P: DenseMVPolynomialEval<F>, F: Field> MultilinearSumcheck<P, F> for CTY11<P, F> {
+impl<P: MultilinearOracle<F>, F: Field> MultilinearSumcheck<P, F> for CTY11<P, F> {
     // Proof needs to be returned in Vec unless we let caller to manager ProverState
     type Proof = Vec<[F; 2]>;
 
@@ -150,7 +141,7 @@ mod test {
         sumcheck::{
             MultilinearSumcheck,
             cty11::{CTY11, InteractiveCTY11},
-            polynomial::DenseMVPolynomialEval,
+            polynomial::MultilinearOracle,
             utils::to_bits_field,
         },
     };
@@ -196,9 +187,8 @@ mod test {
             ark_ff::Fp<ark_ff::MontBackend<bls12_381::FqConfig, 6>, 6>,
             SparseTerm,
         > = rand_poly(10, 1, &mut rng);
-        let claimed_sum: F = iter!(0..1 << p.num_vars(), owned)
-            .map(to_bits_field)
-            .map(|bits| p.evaluate(&bits))
+        let claimed_sum: F = iter!(0..1 << MultilinearOracle::num_vars(&p), owned)
+            .map(|i| p.evaluate_hypercube(i))
             .fold_with(F::zero(), |a, b| a + b)
             .sum();
 
@@ -206,7 +196,7 @@ mod test {
         let mut rs = Vec::new();
 
         let start = Instant::now();
-        while rs.len() != p.num_vars() {
+        while rs.len() != MultilinearOracle::num_vars(&p) {
             proof.push(InteractiveCTY11::prove_step(&p, &rs));
             rs.push(F::rand(&mut rng));
         }
@@ -235,7 +225,7 @@ mod test {
             ark_ff::Fp<ark_ff::MontBackend<bls12_381::FqConfig, 6>, 6>,
             SparseTerm,
         > = rand_poly(10, 1, &mut rng);
-        let claimed_sum: F = iter!(0..1 << p.num_vars(), owned)
+        let claimed_sum: F = iter!(0..1 << MultilinearOracle::num_vars(&p), owned)
             .map(to_bits_field)
             .map(|bits| p.evaluate(&bits))
             .fold_with(F::zero(), |a, b| a + b)
