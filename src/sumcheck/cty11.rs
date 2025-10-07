@@ -1,19 +1,10 @@
 use std::marker::PhantomData;
 
 use ark_ff::Field;
-use ark_poly::multivariate::Term;
 use ark_poly::{DenseUVPolynomial, Polynomial, univariate::DensePolynomial};
 use rayon::iter::ParallelIterator;
-use spongefish::CommonUnitToBytes;
-use spongefish::codecs::arkworks_algebra::{
-    CommonFieldToUnit, FieldToUnitDeserialize, FieldToUnitSerialize, UnitToField,
-};
-use spongefish::{
-    ByteDomainSeparator, DefaultHash, DomainSeparator, ProofResult,
-    codecs::arkworks_algebra::FieldDomainSeparator,
-};
 
-use crate::sumcheck::MultilinearSumcheck;
+use crate::sumcheck::{MultilinearSumcheck, SumcheckResult};
 use crate::{
     iter,
     sumcheck::{
@@ -88,142 +79,53 @@ impl<P: DenseMVPolynomialEval<F>, F: Field> InteractiveCTY11<P, F> {
         DensePolynomial::from_coefficients_vec(vec![p.0, p.1 - p.0]).evaluate(&r)
     }
 
-    pub fn verify_step(prev_sum: F, proof: (F, F)) -> ProofResult<()> {
+    pub fn verify_step(prev_sum: F, proof: (F, F)) -> SumcheckResult<()> {
         if prev_sum == proof.0 + proof.1 {
             Ok(())
         } else {
-            Err(spongefish::ProofError::InvalidProof)
+            Err(())
         }
     }
 
-    pub fn verify_final(p: &P, rs: &[F], final_sum: F) -> ProofResult<()> {
+    pub fn verify_final(p: &P, rs: &[F], final_sum: F) -> SumcheckResult<()> {
         if DenseMVPolynomialEval::evaluate(p, rs) == final_sum {
             Ok(())
         } else {
-            Err(spongefish::ProofError::InvalidProof)
+            Err(())
         }
     }
 }
 
 struct CTY11<P, F>(PhantomData<(P, F)>);
 
-/// The domain separator of a sumcheck.
-///
-/// Using trait allows easy composition of domain separators:
-/// - https://github.com/arkworks-rs/spongefish/blob/main/spongefish/examples/bulletproof.rs
-pub trait CTY11Separator<P: DenseMVPolynomialEval<F>, F: Field> {
-    fn add_statement(self, p: &P) -> Self;
-    fn add_sumcheck(self, p: &P) -> Self;
-}
-
-impl<P: DenseMVPolynomialEval<F>, F: Field> CTY11Separator<P, F> for DomainSeparator
-where
-    Self: FieldDomainSeparator<F>,
-{
-    fn add_statement(self, p: &P) -> Self {
-        let usize_bytes = usize::BITS as usize / u8::BITS as usize;
-        self.add_scalars(p.terms().len(), "coefficients")
-            .add_bytes(
-                usize_bytes
-                * 2 // account for vars and power
-                * iter!(p.terms(), ref)
-                    .map(|(_, t)| t.vars().len())
-                    .sum::<usize>(),
-                "terms",
-            )
-            .add_scalars(1, "sum")
-    }
-
-    fn add_sumcheck(self, p: &P) -> Self {
-        let mut ds = self
-            .add_scalars(2, "proof")
-            .challenge_scalars(1, "challenge");
-
-        for _ in (1..p.num_vars()).rev() {
-            ds = ds.add_scalars(2, "proof").challenge_scalars(1, "challenge");
-        }
-
-        ds
-    }
-}
-
-impl<P: DenseMVPolynomialEval<F>, F: Field> CTY11<P, F> {
-    fn construct_domain_separator(p: &P) -> DomainSeparator {
-        DomainSeparator::<DefaultHash>::new("CTY11")
-            .add_statement(p)
-            .ratchet()
-            .add_sumcheck(p)
-    }
-}
-
 impl<P: DenseMVPolynomialEval<F>, F: Field> MultilinearSumcheck<P, F> for CTY11<P, F> {
     // Proof needs to be returned in Vec unless we let caller to manager ProverState
-    type Proof = Vec<u8>;
+    type Proof = Vec<[F; 2]>;
 
-    fn prove(p: &P, sum: F) -> ProofResult<Self::Proof> {
-        let ds = Self::construct_domain_separator(p);
-        let mut ps = ds.to_prover_state();
-        ps.public_scalars(&iter!(p.terms(), ref).map(|(f, _)| *f).collect::<Vec<_>>())?;
-        ps.public_bytes(
-            &iter!(p.terms(), ref)
-                .map(|(_, t)| {
-                    iter!(t.vars(), owned)
-                        .chain(t.powers())
-                        .flat_map(|v| v.to_le_bytes())
-                })
-                .flatten()
-                .collect::<Vec<_>>(),
-        )?;
-        ps.public_scalars(&[sum])?;
-        ps.ratchet()?;
+    fn prove(p: &P, _: F, rs: &[F]) -> SumcheckResult<Vec<[F; 2]>> {
+        assert_eq!(
+            p.num_vars(),
+            rs.len(),
+            "len of rs should be equal to the number of variables in p"
+        );
 
+        let mut ps = Vec::new();
         let mut proof = Vec::new();
-        let mut rs = Vec::new();
-        while proof.len() != p.num_vars() {
-            let pp = InteractiveCTY11::prove_step(p, &rs);
+        for i in 0..p.num_vars() {
+            let pp = InteractiveCTY11::prove_step(p, &rs[..i]);
             proof.push(pp);
-            ps.add_scalars(&[pp.0, pp.1])?;
-            let [r] = ps.challenge_scalars()?;
-            rs.push(r);
+            ps.push([pp.0, pp.1]);
         }
 
-        Ok(ps.narg_string().into())
+        Ok(ps)
     }
 
-    fn verify(p: &P, sum: F, proof: &Self::Proof) -> ProofResult<()> {
-        let ds = Self::construct_domain_separator(p);
-        let mut vs = ds.to_verifier_state(proof);
-        vs.public_scalars(&iter!(p.terms(), ref).map(|(f, _)| *f).collect::<Vec<_>>())?;
-        vs.public_bytes(
-            &iter!(p.terms(), ref)
-                .map(|(_, t)| {
-                    iter!(t.vars(), owned)
-                        .chain(t.powers())
-                        .flat_map(|v| v.to_le_bytes())
-                })
-                .flatten()
-                .collect::<Vec<_>>(),
-        )?;
-        vs.public_scalars(&[sum])?;
-        vs.ratchet()?;
-
-        let mut rs = vec![];
+    fn verify(p: &P, sum: F, proof: &Self::Proof, rs: &[F]) -> SumcheckResult<()> {
         let mut prev_sum = sum;
-        for _ in 0..p.num_vars() - 1 {
-            let [p0, p1] = vs.next_scalars()?;
-            InteractiveCTY11::<P, F>::verify_step(prev_sum, (p0, p1))?;
-
-            let [r] = vs.challenge_scalars()?;
-            prev_sum = InteractiveCTY11::<P, F>::verifier_reduce_step((p0, p1), r);
-            rs.push(r);
+        for ([p0, p1], r) in proof.iter().zip(rs) {
+            InteractiveCTY11::<P, F>::verify_step(prev_sum, (*p0, *p1))?;
+            prev_sum = InteractiveCTY11::<P, F>::verifier_reduce_step((*p0, *p1), *r);
         }
-
-        let [p0, p1] = vs.next_scalars()?;
-        InteractiveCTY11::<P, F>::verify_step(prev_sum, (p0, p1))?;
-
-        let [r] = vs.challenge_scalars()?;
-        prev_sum = InteractiveCTY11::<P, F>::verifier_reduce_step((p0, p1), r);
-        rs.push(r);
         InteractiveCTY11::<P, F>::verify_final(p, &rs, prev_sum)?;
 
         Ok(())
@@ -338,7 +240,8 @@ mod test {
             .map(|bits| p.evaluate(&bits))
             .fold_with(F::zero(), |a, b| a + b)
             .sum();
-        let proof = CTY11::prove(&p, claimed_sum).unwrap();
-        CTY11::<SparsePolynomial<F, _>, F>::verify(&p, claimed_sum, &proof).unwrap();
+        let rs: [F; 10] = std::array::from_fn(|_| F::rand(&mut rng));
+        let proof = CTY11::prove(&p, claimed_sum, &rs).unwrap();
+        CTY11::<SparsePolynomial<F, _>, F>::verify(&p, claimed_sum, &proof, &rs).unwrap();
     }
 }

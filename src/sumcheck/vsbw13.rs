@@ -3,15 +3,11 @@ use std::{marker::PhantomData, ops::Index};
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, MultilinearExtension, Polynomial, univariate::DensePolynomial};
 use rayon::iter::{IndexedParallelIterator, ParallelIterator};
-use spongefish::{
-    DefaultHash,
-    codecs::arkworks_algebra::{
-        CommonFieldToUnit, DomainSeparator, FieldDomainSeparator, FieldToUnitDeserialize,
-        FieldToUnitSerialize, ProofResult, UnitToField,
-    },
-};
 
-use crate::{iter, sumcheck::MultilinearSumcheckEval};
+use crate::{
+    iter,
+    sumcheck::{MultilinearSumcheckEval, SumcheckResult},
+};
 
 struct InteractiveVSBW13<P, F>(PhantomData<(P, F)>);
 
@@ -42,117 +38,58 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Interactiv
         DensePolynomial::from_coefficients_vec(vec![p.0, p.1 - p.0]).evaluate(&r)
     }
 
-    pub fn verify_step(prev_sum: F, proof: (F, F)) -> ProofResult<()> {
+    pub fn verify_step(prev_sum: F, proof: (F, F)) -> SumcheckResult<()> {
         if prev_sum == proof.0 + proof.1 {
             Ok(())
         } else {
-            Err(spongefish::ProofError::InvalidProof)
+            Err(())
         }
     }
 
-    pub fn verify_final(initp: &P, rs: &[F], final_sum: F) -> ProofResult<()> {
+    pub fn verify_final(initp: &P, rs: &[F], final_sum: F) -> SumcheckResult<()> {
         if initp.fix_variables(rs).to_evaluations()[0] == final_sum {
             Ok(())
         } else {
-            Err(spongefish::ProofError::InvalidProof)
+            Err(())
         }
     }
 }
 
 struct VSBW13<P, F>(PhantomData<(P, F)>);
 
-/// The domain separator of a sumcheck.
-///
-/// Using trait allows easy composition of domain separators:
-/// - https://github.com/arkworks-rs/spongefish/blob/main/spongefish/examples/bulletproof.rs
-pub trait VSBW13Separator<P: MultilinearExtension<F>, F: Field> {
-    fn add_statement(self, p: &P) -> Self;
-    fn add_sumcheck(self, p: &P) -> Self;
-}
-
-impl<P: MultilinearExtension<F>, F: Field> VSBW13Separator<P, F> for DomainSeparator
-where
-    Self: FieldDomainSeparator<F>,
-{
-    fn add_statement(self, p: &P) -> Self {
-        self.add_scalars(1 << p.num_vars(), "polynomial")
-            .add_scalars(1, "sum")
-    }
-
-    fn add_sumcheck(self, p: &P) -> Self {
-        let mut ds = self
-            .add_scalars(2, "proof")
-            .challenge_scalars(1, "challenge");
-
-        for _ in (1..p.num_vars()).rev() {
-            ds = ds.add_scalars(2, "proof").challenge_scalars(1, "challenge");
-        }
-
-        ds
-    }
-}
-
-impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> VSBW13<P, F> {
-    fn construct_domain_separator(p: &P) -> DomainSeparator {
-        DomainSeparator::<DefaultHash>::new("VSBW13")
-            .add_statement(p)
-            .ratchet()
-            .add_sumcheck(p)
-    }
-}
-
 impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> MultilinearSumcheckEval<P, F>
     for VSBW13<P, F>
 {
     // Proof needs to be returned in Vec unless we let caller to manager ProverState
-    type Proof = Vec<u8>;
+    type Proof = Vec<[F; 2]>;
 
-    fn prove(p: &P, sum: F) -> ProofResult<Self::Proof> {
-        let ds = Self::construct_domain_separator(p);
-        let mut ps = ds.to_prover_state();
-        ps.public_scalars(&p.to_evaluations())?;
-        ps.public_scalars(&[sum])?;
-        ps.ratchet()?;
+    fn prove(p: &P, _: F, rs: &[F]) -> SumcheckResult<Self::Proof> {
+        assert_eq!(
+            p.num_vars(),
+            rs.len(),
+            "len of rs should be equal to the number of variables in p"
+        );
+
+        let mut ps = Vec::new();
 
         // Easy way, but incurs additional memory allocation
         let mut p = p.clone();
-        while p.num_vars() != 0 {
+        for r in rs {
             let pp = InteractiveVSBW13::prove_step(&p);
-            ps.add_scalars(&[pp.0, pp.1])?;
-            let [r] = ps.challenge_scalars()?;
-            p = InteractiveVSBW13::prover_reduce_step(&p, r);
+            ps.push([pp.0, pp.1]);
+            p = InteractiveVSBW13::prover_reduce_step(&p, *r);
         }
 
-        Ok(ps.narg_string().into())
+        Ok(ps)
     }
 
-    fn verify(p: &P, sum: F, proof: &Self::Proof) -> ProofResult<()> {
-        let ds = Self::construct_domain_separator(p);
-        let mut vs = ds.to_verifier_state(proof);
-        vs.public_scalars(&p.to_evaluations())?;
-        vs.public_scalars(&[sum])?;
-        vs.ratchet()?;
-
-        let mut rs = vec![];
+    fn verify(p: &P, sum: F, proof: &Self::Proof, rs: &[F]) -> SumcheckResult<()> {
         let mut prev_sum = sum;
-        for _ in 0..p.num_vars() - 1 {
-            let [p0, p1] = vs.next_scalars()?;
-            InteractiveVSBW13::<P, F>::verify_step(prev_sum, (p0, p1))?;
-
-            let [r] = vs.challenge_scalars()?;
-            prev_sum = InteractiveVSBW13::<P, F>::verifier_reduce_step((p0, p1), r);
-            rs.push(r);
+        for ([p0, p1], r) in proof.iter().zip(rs) {
+            InteractiveVSBW13::<P, F>::verify_step(prev_sum, (*p0, *p1))?;
+            prev_sum = InteractiveVSBW13::<P, F>::verifier_reduce_step((*p0, *p1), *r);
         }
-
-        let [p0, p1] = vs.next_scalars()?;
-        InteractiveVSBW13::<P, F>::verify_step(prev_sum, (p0, p1))?;
-
-        let [r] = vs.challenge_scalars()?;
-        prev_sum = InteractiveVSBW13::<P, F>::verifier_reduce_step((p0, p1), r);
-        rs.push(r);
-        InteractiveVSBW13::<P, F>::verify_final(p, &rs, prev_sum)?;
-
-        Ok(())
+        InteractiveVSBW13::<P, F>::verify_final(p, &rs, prev_sum)
     }
 }
 
@@ -202,7 +139,8 @@ mod test {
 
         let p = DenseMultilinearExtension::<F>::rand(10, &mut rng);
         let claimed_sum: F = p.to_evaluations().iter().sum();
-        let proof = VSBW13::prove(&p, claimed_sum).unwrap();
-        VSBW13::<DenseMultilinearExtension<F>, F>::verify(&p, claimed_sum, &proof).unwrap();
+        let rs: [F; 10] = std::array::from_fn(|_| F::rand(&mut rng));
+        let proof = VSBW13::prove(&p, claimed_sum, &rs).unwrap();
+        VSBW13::<DenseMultilinearExtension<F>, F>::verify(&p, claimed_sum, &proof, &rs).unwrap();
     }
 }
