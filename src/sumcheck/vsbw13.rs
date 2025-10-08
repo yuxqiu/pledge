@@ -55,7 +55,13 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Interactiv
     }
 }
 
-struct VSBW13<P, F>(PhantomData<(P, F)>);
+pub struct VSBW13<P, F>(PhantomData<(P, F)>);
+
+impl<P, F> VSBW13<P, F> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
 
 impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> MultilinearSumcheckEval<P, F>
     for VSBW13<P, F>
@@ -63,7 +69,7 @@ impl<P: MultilinearExtension<F> + Index<usize, Output = F>, F: Field> Multilinea
     // Proof needs to be returned in Vec unless we let caller to manager ProverState
     type Proof = Vec<[F; 2]>;
 
-    fn prove(p: &P, _: F, rs: &[F]) -> SumcheckResult<Self::Proof> {
+    fn prove(&self, p: &P, _: F, rs: &[F]) -> SumcheckResult<Self::Proof> {
         assert_eq!(
             p.num_vars(),
             rs.len(),
@@ -140,7 +146,9 @@ mod test {
         let p = DenseMultilinearExtension::<F>::rand(10, &mut rng);
         let claimed_sum: F = p.to_evaluations().iter().sum();
         let rs: [F; 10] = std::array::from_fn(|_| F::rand(&mut rng));
-        let proof = VSBW13::prove(&p, claimed_sum, &rs).unwrap();
+
+        let prover = VSBW13::new();
+        let proof = prover.prove(&p, claimed_sum, &rs).unwrap();
         VSBW13::<DenseMultilinearExtension<F>, F>::verify(&p, claimed_sum, &proof, &rs).unwrap();
     }
 }

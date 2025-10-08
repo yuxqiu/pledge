@@ -87,13 +87,19 @@ impl<P: MultilinearOracle<F>, F: Field> InteractiveCTY11<P, F> {
     }
 }
 
-struct CTY11<P, F>(PhantomData<(P, F)>);
+pub struct CTY11<P, F>(PhantomData<(P, F)>);
+
+impl<P, F> CTY11<P, F> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
 
 impl<P: MultilinearOracle<F>, F: Field> MultilinearSumcheck<P, F> for CTY11<P, F> {
     // Proof needs to be returned in Vec unless we let caller to manager ProverState
     type Proof = Vec<[F; 2]>;
 
-    fn prove(p: &P, _: F, rs: &[F]) -> SumcheckResult<Vec<[F; 2]>> {
+    fn prove(&self, p: &P, _: F, rs: &[F]) -> SumcheckResult<Vec<[F; 2]>> {
         assert_eq!(
             p.num_vars(),
             rs.len(),
@@ -231,7 +237,9 @@ mod test {
             .fold_with(F::zero(), |a, b| a + b)
             .sum();
         let rs: [F; 10] = std::array::from_fn(|_| F::rand(&mut rng));
-        let proof = CTY11::prove(&p, claimed_sum, &rs).unwrap();
+
+        let prover = CTY11::new();
+        let proof = prover.prove(&p, claimed_sum, &rs).unwrap();
         CTY11::<SparsePolynomial<F, _>, F>::verify(&p, claimed_sum, &proof, &rs).unwrap();
     }
 }
