@@ -5,7 +5,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use ark_ec::{CurveGroup, VariableBaseMSM};
 use ark_ff::UniformRand;
 use ark_test_curves::bls12_381::G1Projective;
-use poly_commit::utils::msm::pippenger;
+use pledge::utils::msm::pippenger;
 
 type F = Fr;
 

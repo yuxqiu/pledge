@@ -3,7 +3,7 @@ use ark_poly_commit::kzg10;
 use ark_std::rand::{SeedableRng, rngs::StdRng};
 use ark_test_curves::bls12_381::{Bls12_381, Fr};
 use criterion::{Criterion, criterion_group, criterion_main};
-use poly_commit::kzg::KZG;
+use pledge::kzg::KZG;
 
 fn kzg_bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("KZG");
