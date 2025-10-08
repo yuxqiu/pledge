@@ -2,10 +2,12 @@ use std::marker::PhantomData;
 
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, Polynomial, univariate::DensePolynomial};
-use rayon::iter::ParallelIterator;
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 use crate::sumcheck::polynomial::MultilinearOracle;
 use crate::sumcheck::{MultilinearSumcheck, SumcheckResult};
+use crate::utils::iter::UnifiedFold;
 use crate::{iter, sumcheck::polynomial::LagPoly};
 
 struct InteractiveCTY11<P, F>(PhantomData<(P, F)>);
@@ -21,11 +23,9 @@ impl<P: MultilinearOracle<F>, F: Field> InteractiveCTY11<P, F> {
             return (
                 iter!(0..1 << (p.num_vars() - 1), owned)
                     .map(|i| p.evaluate_hypercube(i << 1))
-                    .fold_with(F::zero(), |a, b| a + b)
                     .sum(),
                 iter!(0..1 << (p.num_vars() - 1), owned)
                     .map(|i| p.evaluate_hypercube((i << 1) + 1))
-                    .fold_with(F::zero(), |a, b| a + b)
                     .sum(),
             );
         }
@@ -33,34 +33,29 @@ impl<P: MultilinearOracle<F>, F: Field> InteractiveCTY11<P, F> {
         let j_bits = p.num_vars() - (rs.len() + 1);
 
         iter!(0..(1 << rs.len()), owned)
-            .fold_with((F::zero(), F::zero()), |(p0, p1), i| {
+            .map(|i| {
                 let j_range = 0..1usize << j_bits; // j_range is at least 0..1
                 let (psum0, psum1) = iter!(j_range, owned)
-                    .fold_with(
-                        (F::zero(), F::zero()), // Initialize (psum0, psum1) for each j-thread
-                        |(mut psum0, mut psum1), j| {
-                            // Construct the number for psum0: j | 0 | i
-                            let num0 = (j << (rs.len() + 1)) | (0 << rs.len()) | i;
-                            // Construct the number for psum1: j | 1 | i
-                            let num1 = (j << (rs.len() + 1)) | (1 << rs.len()) | i;
+                    .map(|j| {
+                        // Construct the number for psum0: j | 0 | i
+                        let num0 = (j << (rs.len() + 1)) | (0 << rs.len()) | i;
+                        // Construct the number for psum1: j | 1 | i
+                        let num1 = (j << (rs.len() + 1)) | (1 << rs.len()) | i;
 
-                            psum0 += p.evaluate_hypercube(num0);
-                            psum1 += p.evaluate_hypercube(num1);
-                            (psum0, psum1)
-                        },
-                    )
-                    .reduce(
-                        || (F::zero(), F::zero()), // Identity for j reduction
+                        (p.evaluate_hypercube(num0), p.evaluate_hypercube(num1))
+                    })
+                    .unified_fold(
+                        (F::zero(), F::zero()), // Identity for j reduction
                         |(psum0_a, psum1_a), (psum0_b, psum1_b)| {
                             (psum0_a + psum0_b, psum1_a + psum1_b)
                         },
                     );
 
                 let lagpoly = LagPoly::evaluate(i, rs);
-                (p0 + lagpoly * psum0, p1 + lagpoly * psum1) // Scale and accumulate
+                (lagpoly * psum0, lagpoly * psum1) // Scale and accumulate
             })
-            .reduce(
-                || (F::zero(), F::zero()), // Identity for reduction
+            .unified_fold(
+                (F::zero(), F::zero()), // Identity for reduction
                 |(p0_a, p1_a), (p0_b, p1_b)| (p0_a + p0_b, p1_a + p1_b), // Combine partial sums
             )
     }
@@ -133,14 +128,15 @@ impl<P: MultilinearOracle<F>, F: Field> MultilinearSumcheck<P, F> for CTY11<P, F
 mod test {
     use std::{panic::Location, time::Instant};
 
-    use ark_ff::{Field, UniformRand, Zero};
+    use ark_ff::{Field, UniformRand};
     use ark_poly::{
         DenseMVPolynomial,
         multivariate::{SparsePolynomial, SparseTerm, Term},
     };
     use ark_std::{rand::Rng, test_rng};
     use ark_test_curves::bls12_381;
-    use rayon::iter::ParallelIterator;
+    #[cfg(feature = "parallel")]
+    use rayon::prelude::*;
 
     use crate::{
         iter,
@@ -195,7 +191,6 @@ mod test {
         > = rand_poly(10, 1, &mut rng);
         let claimed_sum: F = iter!(0..1 << MultilinearOracle::num_vars(&p), owned)
             .map(|i| p.evaluate_hypercube(i))
-            .fold_with(F::zero(), |a, b| a + b)
             .sum();
 
         let mut proof = Vec::new();
@@ -234,7 +229,6 @@ mod test {
         let claimed_sum: F = iter!(0..1 << MultilinearOracle::num_vars(&p), owned)
             .map(to_bits_field)
             .map(|bits| p.evaluate(&bits))
-            .fold_with(F::zero(), |a, b| a + b)
             .sum();
         let rs: [F; 10] = std::array::from_fn(|_| F::rand(&mut rng));
 

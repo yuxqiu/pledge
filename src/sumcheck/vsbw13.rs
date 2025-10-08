@@ -2,7 +2,8 @@ use std::{marker::PhantomData, ops::Index};
 
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, MultilinearExtension, Polynomial, univariate::DensePolynomial};
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 use crate::{
     iter,

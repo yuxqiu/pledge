@@ -19,7 +19,7 @@ criterion = "0.6.0"
 
 [features]
 default = ["parallel"]
-parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "rayon"]
+parallel = ["ark-ec/parallel", "ark-ff/parallel", "ark-poly/parallel", "ark-std/parallel", "dep:rayon"]
 
 [[bench]]
 name = "kzg"

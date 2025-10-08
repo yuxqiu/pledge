@@ -43,7 +43,6 @@ cargo test
         * [ ] Sumcheck for product of Multilinear Polynomial
 * Others
     * [ ] WASM bindings for browser-based experiments
-    * [ ] Compile without `rayon`
 
 ## License
 

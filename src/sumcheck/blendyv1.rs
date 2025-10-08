@@ -2,7 +2,8 @@ use std::marker::PhantomData;
 
 use ark_ff::Field;
 use ark_poly::{DenseUVPolynomial, Polynomial, univariate::DensePolynomial};
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 use crate::{
     iter,
@@ -10,6 +11,7 @@ use crate::{
         MultilinearSumcheck, SumcheckResult,
         polynomial::{LagPolyIter, MultilinearOracle},
     },
+    utils::iter::UnifiedFold,
 };
 
 struct PS<P: MultilinearOracle<F>, F: Field> {
@@ -50,7 +52,6 @@ impl<P: MultilinearOracle<F>, F: Field> PS<P, F> {
                             let index = b3 << (rs.len() + b2_size) | b2 << (rs.len()) | b1;
                             p.evaluate_hypercube(index)
                         })
-                        .fold_with(F::zero(), F::add)
                         .sum::<F>();
             }
         }
@@ -131,18 +132,17 @@ impl<P: MultilinearOracle<F>, F: Field> MultilinearSumcheck<P, F> for Blendyv1<P
 
             let (pj0, pj1) = iter!(lag_v, ref)
                 .enumerate()
-                .fold_with((F::zero(), F::zero()), |(l0, l1), (b2, lag_value)| {
+                .map(|(b2, lag_value)| {
                     (
-                        l0 + *lag_value * ps.sum(b2, (ALL_ONES << (b2_len + 1) | b2) & end_mask),
+                        *lag_value * ps.sum(b2, (ALL_ONES << (b2_len + 1) | b2) & end_mask),
                         // (ALL_ONES << (b2_len) | b2) & end_mask = (ALL_ONES << (b2_len + 1) | 1 << (b2_len) | b2) & end_mask
-                        l1 + *lag_value
+                        *lag_value
                             * ps.sum((1 << b2_len) | b2, (ALL_ONES << (b2_len) | b2) & end_mask),
                     )
                 })
-                .reduce(
-                    || (F::zero(), F::zero()),
-                    |(psum0_a, psum1_a), (psum0_b, psum1_b)| (psum0_a + psum0_b, psum1_a + psum1_b),
-                );
+                .unified_fold((F::zero(), F::zero()), |(l0, l1), (r0, r1)| {
+                    (l0 + r0, l1 + r1)
+                });
             proof.push([pj0, pj1]);
 
             // update lag_v unless when we are in the last round

@@ -5,7 +5,8 @@ use ark_poly::DenseMultilinearExtension;
 use ark_poly::MultilinearExtension;
 use ark_poly::multivariate::Term;
 use ark_poly::multivariate::{SparsePolynomial, SparseTerm};
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 use crate::iter;
 use crate::sumcheck::utils::to_bits_be;
@@ -24,12 +25,7 @@ impl LagPoly {
 
         iter!(to_bits_le(bs), owned)
             .zip(rs)
-            .fold_with(
-                F::one(),
-                |a, (b, r)| {
-                    if b { a * r } else { a * (F::one() - r) }
-                },
-            )
+            .map(|(b, r)| if b { *r } else { F::one() - r })
             .product()
     }
 }
@@ -104,7 +100,6 @@ impl<F: Field> MultilinearOracle<F> for SparsePolynomial<F, SparseTerm> {
     fn claimed_sum(&self) -> F {
         iter!(0..1 << MultilinearOracle::num_vars(self), owned)
             .map(|i| MultilinearOracle::evaluate_hypercube(self, i))
-            .fold_with(F::zero(), |a, b| a + b)
             .sum()
     }
 

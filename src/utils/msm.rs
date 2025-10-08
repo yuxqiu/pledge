@@ -1,6 +1,7 @@
 use ark_ec::VariableBaseMSM;
 use ark_ff::{BigInteger, PrimeField};
-use rayon::iter::{IndexedParallelIterator, ParallelIterator};
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 use crate::iter;
 
