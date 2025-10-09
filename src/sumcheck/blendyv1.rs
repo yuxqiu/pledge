@@ -36,8 +36,11 @@ impl<P: MultilinearOracle<F>, F: Field> PS<P, F> {
             "len of rs should be a multiple of the size of the stage"
         );
 
-        let b2_size = (p.num_vars() - rs.len()).min(l);
-        let b3_size = p.num_vars() - rs.len() - b2_size;
+        let b1_size = rs.len();
+        let b2_size = (p.num_vars() - b1_size).min(l);
+        let b3_size = p.num_vars() - b1_size - b2_size;
+
+        dbg!(b1_size, b2_size, b3_size);
 
         let mut aux = Vec::new();
         aux.reserve_exact(1 << b2_size);
@@ -49,7 +52,7 @@ impl<P: MultilinearOracle<F>, F: Field> PS<P, F> {
                 aux[aux_index] += lagpoly
                     * iter!(0..1 << b3_size, owned)
                         .map(|b3| {
-                            let index = b3 << (rs.len() + b2_size) | b2 << (rs.len()) | b1;
+                            let index = b3 << (b1_size + b2_size) | b2 << (b1_size) | b1;
                             p.evaluate_hypercube(index)
                         })
                         .sum::<F>();
@@ -76,6 +79,7 @@ impl<P: MultilinearOracle<F>, F: Field> PS<P, F> {
 
         let start = Self::hypercube_num_to_aux(start, self.l);
         let end = Self::hypercube_num_to_aux(end, self.l);
+
         self.ps[end]
             - if start == 0 {
                 F::zero()
@@ -182,13 +186,13 @@ impl<P: MultilinearOracle<F>, F: Field> MultilinearSumcheck<P, F> for Blendyv1<P
 mod test {
     use ark_ff::{AdditiveGroup, UniformRand};
     use ark_poly::{DenseMultilinearExtension, MultilinearExtension};
-    use ark_std::{rand::RngCore, test_rng};
+    use ark_std::test_rng;
     use ark_test_curves::bls12_381;
 
     use crate::sumcheck::{
         MultilinearSumcheck, MultilinearSumcheckEval,
         blendyv1::{Blendyv1, PS},
-        polynomial::MultilinearOracle,
+        polynomial::{LagPoly, MultilinearOracle},
         vsbw13::VSBW13,
     };
 
@@ -197,28 +201,28 @@ mod test {
         type F = bls12_381::Fq;
 
         const VARS: usize = 5;
+        const L: usize = 1;
         let mut rng = test_rng();
         let p = DenseMultilinearExtension::<F>::rand(VARS, &mut rng);
+        let rs: [F; VARS] = std::array::from_fn(|_| F::rand(&mut rng));
 
-        let ps = PS::new(&p, VARS, &[]);
-        let b = rng.next_u32() as usize;
-        let b = b & ((1 << VARS) - 1);
-        for i in 0..VARS {
-            let prefix_i = b & ((1 << i) - 1);
+        for i in (0..VARS).step_by(L) {
+            let ps = PS::new(&p, L, &rs[..i]);
 
-            let start = prefix_i;
-            let end = (((1 << VARS) - 1) >> i << i) | prefix_i;
-            let ps_sum = ps.sum(start, end);
-            let p_sum = {
-                let prefix_i = b & ((1 << i) - 1);
-                let mut s = F::ZERO;
-                for j in 0..(1 << (VARS - i)) {
-                    let index = j << i | prefix_i;
-                    s += p.evaluate_hypercube(index);
+            for l in 0..1 << L.min(VARS - i) {
+                let ps_sum = ps.sum(l, l);
+                let mut p_sum = F::ZERO;
+
+                for b in 0..1 << i {
+                    let lagpoly = LagPoly::evaluate(b, &rs[..i]);
+                    for j in 0..(1 << (VARS - i).saturating_sub(L)) {
+                        let index = j << (i + L) | l << i | b;
+                        p_sum += lagpoly * p.evaluate_hypercube(index);
+                    }
                 }
-                s
-            };
-            assert_eq!(p_sum, ps_sum);
+
+                assert_eq!(p_sum, ps_sum);
+            }
         }
     }
 
